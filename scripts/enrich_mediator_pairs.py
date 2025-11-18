@@ -425,9 +425,62 @@ def process_indirect_interaction(
             else:
                 print(f"    [DRY-RUN] Would update database")
         else:
-            print(f"    [CREATE] Interaction does not exist, would create new entry")
-            # Would need to create new interaction here
-            # (Skipping for now - focus on enriching existing)
+            print(f"    [CREATE] Interaction does not exist, creating new entry")
+
+            # CREATE new direct interaction
+            # Determine canonical ordering
+            if mediator_protein.id < target_protein_obj.id:
+                protein_a_id = mediator_protein.id
+                protein_b_id = target_protein_obj.id
+                # mediator → target means a → b
+                direction = "a_to_b"
+            else:
+                protein_a_id = target_protein_obj.id
+                protein_b_id = mediator_protein.id
+                # mediator → target means b → a
+                direction = "b_to_a"
+
+            # Build interaction data
+            interaction_data_new = {
+                "primary": target_protein,
+                "direction": "main_to_primary",  # From mediator's perspective
+                "arrow": enriched_function.get("arrow", "activates"),
+                "interaction_type": "direct",
+                "function_context": "direct",
+                "functions": [enriched_function],
+                "evidence": enriched_function.get("evidence", []),
+                "pmids": enriched_function.get("pmids", []),
+                "confidence": enriched_function.get("confidence", 0.75),
+                "_inferred_from_chain": True,
+                "_enriched_by_script": True,
+                "_original_chain": f"{main_protein}→{mediator}→{target_protein}"
+            }
+
+            if not dry_run:
+                # Create new Interaction record
+                new_interaction = Interaction(
+                    protein_a_id=protein_a_id,
+                    protein_b_id=protein_b_id,
+                    confidence=interaction_data_new.get("confidence", 0.75),
+                    direction=direction,
+                    arrow=enriched_function.get("arrow", "activates"),
+                    data=interaction_data_new,
+                    discovered_in_query=main_protein,
+                    discovery_method="mediator_pair_enrichment",
+                    interaction_type="direct",
+                    function_context="direct",
+                    upstream_interactor=None,
+                    mediator_chain=None,
+                    depth=1,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+
+                db.session.add(new_interaction)
+                db.session.commit()
+                print(f"    [CREATE] ✓ Created new interaction (ID: {new_interaction.id})")
+            else:
+                print(f"    [DRY-RUN] Would create new interaction")
 
     return enriched_function
 
