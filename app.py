@@ -620,21 +620,14 @@ def build_full_json_from_db(protein_symbol: str) -> dict:
                             Interaction.protein_b_id == mediator_protein.id
                         ).first()
 
-                    if chain_link:
-                        # DEBUG: Log chain link discovery
-                        if chain_link.id not in chain_link_ids:
-                            print(f"[CHAIN LINK] Found: {mediator_symbol} → {target_protein.symbol} (ID: {chain_link.id}, type: {chain_link.interaction_type})")
-                            chain_link_ids.add(chain_link.id)
+                    if chain_link and chain_link.id not in chain_link_ids:
+                        chain_link_ids.add(chain_link.id)
 
-                            # Add this chain link to interactor_proteins for shared link detection
-                            if chain_link.protein_a not in interactor_proteins:
-                                interactor_proteins.append(chain_link.protein_a)
-                            if chain_link.protein_b not in interactor_proteins:
-                                interactor_proteins.append(chain_link.protein_b)
-                        else:
-                            print(f"[CHAIN LINK] Already processed: {mediator_symbol} → {target_protein.symbol} (ID: {chain_link.id})")
-                    else:
-                        print(f"[CHAIN LINK] NOT FOUND in database: {mediator_symbol} → {target_protein.symbol}")
+                        # Add this chain link to interactor_proteins for shared link detection
+                        if chain_link.protein_a not in interactor_proteins:
+                            interactor_proteins.append(chain_link.protein_a)
+                        if chain_link.protein_b not in interactor_proteins:
+                            interactor_proteins.append(chain_link.protein_b)
 
                         # Add both proteins to protein set
                         protein_set.add(chain_link.protein_a.symbol)
@@ -745,14 +738,15 @@ def build_full_json_from_db(protein_symbol: str) -> dict:
                  shared_ix.discovery_method == 'indirect_chain_extraction')
             )
 
+            # Skip if already added as chain link OR if part of indirect chain (unless it's a direct chain link)
+            if shared_ix.id in chain_link_ids:
+                continue  # Already added in chain link section
+
             # Skip if this interaction is part of an indirect chain in THIS query
             # UNLESS it's a direct chain link (which we want to show)
             if not is_direct_chain_link:
                 if (protein_a_sym, protein_b_sym) in indirect_chain_pairs or (protein_b_sym, protein_a_sym) in indirect_chain_pairs:
-                    print(f"[SHARED LINK] Skipping (part of indirect chain): {protein_a_sym} ↔ {protein_b_sym}")
                     continue  # Don't add to shared links
-            else:
-                print(f"[SHARED LINK] Including direct chain link: {protein_a_sym} → {protein_b_sym} (ID: {shared_ix.id})")
             # Get both proteins involved in this shared link
             protein_a = shared_ix.protein_a
             protein_b = shared_ix.protein_b
