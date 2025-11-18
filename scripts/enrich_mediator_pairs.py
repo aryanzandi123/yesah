@@ -111,8 +111,8 @@ def call_gemini_with_thinking(
                 threshold="OFF"
             )
         ],
-        "tools": [types.Tool(google_search=types.GoogleSearch())],  # Enable Google Search
-        "response_mime_type": "application/json" if response_format == "json" else "text/plain"
+        "tools": [types.Tool(google_search=types.GoogleSearch())]  # Enable Google Search
+        # NOTE: Cannot use response_mime_type with tools - parse JSON manually from text response
     }
 
     config = types.GenerateContentConfig(**config_args)
