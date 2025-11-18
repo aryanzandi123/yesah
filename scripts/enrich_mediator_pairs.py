@@ -493,6 +493,91 @@ def process_indirect_interaction(
     return enriched_function
 
 
+def enrich_protein_mediator_pairs(
+    protein_symbol: str,
+    api_key: str,
+    verbose: bool = False,
+    dry_run: bool = False
+) -> Dict[str, int]:
+    """
+    Enrich mediator-target pairs for a specific protein (programmatic interface).
+
+    Args:
+        protein_symbol: Protein to process (e.g., "ATXN3")
+        api_key: Google AI API key
+        verbose: Enable verbose logging
+        dry_run: Don't write to database
+
+    Returns:
+        Stats dict with enrichment counts
+    """
+    with app.app_context():
+        # Find protein
+        protein = Protein.query.filter_by(symbol=protein_symbol).first()
+        if not protein:
+            print(f"[ENRICH] Protein '{protein_symbol}' not found in database", file=sys.stderr)
+            return {"pairs_enriched": 0}
+
+        # Query indirect interactions for this protein
+        query = Interaction.query.filter_by(interaction_type="indirect").filter(
+            (Interaction.protein_a_id == protein.id) |
+            (Interaction.protein_b_id == protein.id)
+        )
+
+        interactions = query.all()
+
+        if not interactions:
+            print(f"[ENRICH] No indirect interactions found for {protein_symbol}", file=sys.stderr)
+            return {"pairs_enriched": 0}
+
+        pairs_enriched = 0
+
+        for interaction in interactions:
+            # Extract chain
+            mediator_chain = interaction.mediator_chain
+            if not mediator_chain or len(mediator_chain) == 0:
+                continue
+
+            # Get target protein
+            target_protein_id = interaction.protein_b_id if interaction.protein_a_id == protein.id else interaction.protein_a_id
+            target_protein = db.session.get(Protein, target_protein_id)
+            if not target_protein:
+                continue
+
+            # Process each mediator-target pair
+            for mediator_symbol in mediator_chain:
+                # Get function context from interaction
+                functions = interaction.data.get("functions", [])
+                if not functions:
+                    continue
+
+                function_name = functions[0].get("function", "Unknown Function")
+                function_context = functions[0].get("biological_consequence", "")
+
+                # Enrich this pair
+                try:
+                    enriched_function = enrich_mediator_target_pair(
+                        mediator=mediator_symbol,
+                        target=target_protein.symbol,
+                        function_name=function_name,
+                        function_context=function_context,
+                        api_key=api_key,
+                        verbose=verbose,
+                        dry_run=dry_run
+                    )
+
+                    if enriched_function:
+                        pairs_enriched += 1
+
+                except Exception as e:
+                    if verbose:
+                        print(f"[ENRICH] Error enriching {mediator_symbol}→{target_protein.symbol}: {e}", file=sys.stderr)
+
+        db.session.commit()
+
+        return {"pairs_enriched": pairs_enriched}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Enrich mediator-target pairs with complete function data")
     parser.add_argument("--dry-run", action="store_true", help="Don't write to database")

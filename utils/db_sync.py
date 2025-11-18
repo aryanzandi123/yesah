@@ -234,6 +234,9 @@ class DatabaseSyncLayer:
             # Commit transaction
             db.session.commit()
 
+            # POST-PROCESSING: Validate and enrich interactions after commit
+            self._post_process_interactions(protein_symbol, stats)
+
         except Exception as e:
             # Rollback on any error
             db.session.rollback()
@@ -241,6 +244,60 @@ class DatabaseSyncLayer:
             raise
 
         return stats
+
+    def _post_process_interactions(self, protein_symbol: str, stats: Dict[str, int]) -> None:
+        """
+        Post-process interactions after database commit.
+
+        Runs validation and enrichment on newly created/updated interactions:
+        1. Arrow validation (validate_existing_arrows.py logic)
+        2. Mediator pair enrichment (enrich_mediator_pairs.py logic)
+
+        Args:
+            protein_symbol: Query protein that was just synced
+            stats: Sync statistics
+
+        Side effects:
+            - Updates interaction records with validated arrows
+            - Creates/enriches direct mediator-target interactions
+        """
+        try:
+            import os
+
+            # Only run if there were new/updated interactions
+            if stats["interactions_created"] == 0 and stats["interactions_updated"] == 0:
+                return
+
+            api_key = os.environ.get("GOOGLE_AI_API_KEY")
+            if not api_key:
+                print(f"[POST-PROCESS] Skipping validation/enrichment: GOOGLE_AI_API_KEY not set", file=sys.stderr)
+                return
+
+            print(f"\n[POST-PROCESS] Running validation and enrichment for {protein_symbol}...", file=sys.stderr)
+
+            # STEP 1: Arrow validation
+            try:
+                from scripts.validate_existing_arrows import validate_and_update_interactions
+                print(f"[POST-PROCESS] → Validating arrows...", file=sys.stderr)
+                validate_and_update_interactions(protein_symbol, api_key, verbose=False)
+                print(f"[POST-PROCESS] ✓ Arrow validation complete", file=sys.stderr)
+            except Exception as e:
+                print(f"[POST-PROCESS] ✗ Arrow validation failed: {e}", file=sys.stderr)
+
+            # STEP 2: Mediator pair enrichment
+            try:
+                from scripts.enrich_mediator_pairs import enrich_protein_mediator_pairs
+                print(f"[POST-PROCESS] → Enriching mediator pairs...", file=sys.stderr)
+                enrich_protein_mediator_pairs(protein_symbol, api_key, verbose=False)
+                print(f"[POST-PROCESS] ✓ Mediator enrichment complete", file=sys.stderr)
+            except Exception as e:
+                print(f"[POST-PROCESS] ✗ Mediator enrichment failed: {e}", file=sys.stderr)
+
+            print(f"[POST-PROCESS] Post-processing complete for {protein_symbol}\n", file=sys.stderr)
+
+        except Exception as e:
+            # Don't fail the entire sync if post-processing fails
+            print(f"[POST-PROCESS] Error during post-processing: {e}", file=sys.stderr)
 
     def _get_or_create_protein(self, symbol: str) -> Protein:
         """
