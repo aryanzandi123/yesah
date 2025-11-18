@@ -1058,14 +1058,12 @@ def main():
                 try:
                     print(f"  [{idx+1}/{len(direct_links_extracted)}] [{tier_label}] Validating: {mediator} → {target}")
 
-                    # TIER 1: Skip validation (already validated, from existing DB)
+                    # ALL TIERS: Validate the direct link (even if from existing DB)
+                    # For Tier 1, the existing DB record provides context but we still validate
                     if tier == 1:
                         existing_id = direct_link_data.get("_existing_db_id")
-                        print(f"    → Using existing database record (ID: {existing_id}), no validation needed")
-                        direct_links_validated += 1
-                        continue  # Skip to next
+                        print(f"    → Using existing database record (ID: {existing_id}) as context, validating...")
 
-                    # TIER 2 & 3: Validate the direct link
                     correction = validate_interaction_record(
                         direct_link_data,
                         api_key,
