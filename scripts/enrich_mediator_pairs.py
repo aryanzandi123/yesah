@@ -47,11 +47,11 @@ except ImportError:
     sys.exit(1)
 
 
-# Constants
-MAX_THINKING_TOKENS = 32768  # Extended thinking like main pipeline
-MAX_OUTPUT_TOKENS = 16384    # Large output for complete function data
-TEMPERATURE = 0.3            # Slightly creative for comprehensive descriptions
-TOP_P = 0.95
+# Constants - Match runner.py configuration
+MAX_THINKING_TOKENS = 32768  # Extended thinking budget
+MAX_OUTPUT_TOKENS = 65536    # Match runner.py
+TEMPERATURE = 0.3            # Match runner.py
+TOP_P = 0.90                 # Match runner.py
 MAX_WORKERS = 3              # Conservative for complex queries
 
 LOG_DIR = Path("logs")
@@ -66,7 +66,7 @@ def call_gemini_with_thinking(
     max_retries: int = 3
 ) -> Optional[Dict[str, Any]]:
     """
-    Call Gemini 2.5 Pro with extended thinking mode and Google Search.
+    Call Gemini 2.5 Pro with thinking budget and Google Search (matches runner.py config).
 
     Args:
         prompt: User prompt
@@ -80,13 +80,20 @@ def call_gemini_with_thinking(
     """
     client = google_genai.Client(api_key=api_key)
 
-    # Configure generation
-    config = types.GenerateContentConfig(
-        temperature=TEMPERATURE,
-        top_p=TOP_P,
-        max_output_tokens=MAX_OUTPUT_TOKENS,
-        response_modalities=["TEXT"],
-        safety_settings=[
+    # Configure thinking mode - Match runner.py pattern
+    thinking_config = types.ThinkingConfig(
+        thinking_budget=MAX_THINKING_TOKENS,
+        include_thoughts=True
+    )
+
+    # Configure generation - Match runner.py configuration
+    config_args = {
+        "temperature": TEMPERATURE,
+        "top_p": TOP_P,
+        "max_output_tokens": MAX_OUTPUT_TOKENS,
+        "thinking_config": thinking_config,
+        "response_modalities": ["TEXT"],
+        "safety_settings": [
             types.SafetySetting(
                 category="HARM_CATEGORY_HATE_SPEECH",
                 threshold="OFF"
@@ -104,18 +111,19 @@ def call_gemini_with_thinking(
                 threshold="OFF"
             )
         ],
-        thinking_config=types.ThinkingConfig(
-            mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-            max_tokens=MAX_THINKING_TOKENS
-        ),
-        tools=[types.Tool(google_search=types.GoogleSearch())],  # Enable Google Search
-        response_mime_type="application/json" if response_format == "json" else "text/plain"
-    )
+        "tools": [types.Tool(google_search=types.GoogleSearch())],  # Enable Google Search
+        "response_mime_type": "application/json" if response_format == "json" else "text/plain"
+    }
+
+    config = types.GenerateContentConfig(**config_args)
+
+    # Use gemini-2.5-pro like runner.py
+    model_name = "gemini-2.5-pro"
 
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash-thinking-exp-01-21",
+                model=model_name,
                 contents=prompt,
                 config=config
             )
