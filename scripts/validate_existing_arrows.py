@@ -66,10 +66,15 @@ LOG_DIR.mkdir(exist_ok=True)
 
 def deduplicate_functions(functions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Deduplicates functions by name, preferring validated/more complete entries.
+    Deduplicates functions by name AND context, preserving both net and direct variants.
 
-    CRITICAL: Validated entries (_arrow_validated=True) ALWAYS trump non-validated entries.
-    This ensures arrow validation results replace all previous data.
+    CRITICAL CHANGE: Now groups by (function_name, function_context) tuple.
+    This allows BOTH net effect and direct effect functions to coexist.
+
+    Example:
+    - Function "mTORC1 Signaling" with function_context='net' (chain context)
+    - Function "mTORC1 Signaling" with function_context='direct' (normal pair)
+    Both are kept as separate entries!
 
     Args:
         functions: List of function dicts
@@ -80,7 +85,7 @@ def deduplicate_functions(functions: List[Dict[str, Any]]) -> List[Dict[str, Any
     if not functions:
         return []
 
-    # Group by function name (case-insensitive)
+    # Group by (function_name, function_context) tuple
     seen = {}
 
     for func in functions:
@@ -88,31 +93,31 @@ def deduplicate_functions(functions: List[Dict[str, Any]]) -> List[Dict[str, Any
         if not func_name:
             continue
 
-        if func_name in seen:
-            existing = seen[func_name]
+        # CRITICAL: Include function_context in the key
+        func_context = func.get("function_context") or "unknown"
+        key = (func_name, func_context)
 
-            # Check validation flags (arrow_validated is set by arrow_effect_validator.py)
-            # We look at the PARENT interaction's _arrow_validated flag, not individual functions
-            # But we can also check for arrow_context which is only added by validator
+        if key in seen:
+            existing = seen[key]
+
+            # Check validation flags
             is_validated = func.get("arrow_context") is not None or func.get("direct_arrow") is not None
             existing_validated = existing.get("arrow_context") is not None or existing.get("direct_arrow") is not None
 
-            # RULE 1: Validated entries ALWAYS replace non-validated (trumping rule)
+            # RULE 1: Validated entries ALWAYS replace non-validated
             if is_validated and not existing_validated:
-                seen[func_name] = func  # REPLACE with validated entry
+                seen[key] = func  # REPLACE
             elif existing_validated and not is_validated:
-                # Keep existing validated entry, discard non-validated
-                pass
+                pass  # Keep existing
             else:
                 # Both validated or both non-validated: prefer more complete
                 existing_fields = sum(1 for v in existing.values() if v not in [None, "", []])
                 current_fields = sum(1 for v in func.values() if v not in [None, "", []])
 
                 if current_fields > existing_fields:
-                    seen[func_name] = func  # Prefer more complete
-                # else: keep existing
+                    seen[key] = func
         else:
-            seen[func_name] = func
+            seen[key] = func
 
     return list(seen.values())
 
