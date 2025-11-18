@@ -427,6 +427,17 @@ def build_full_json_from_db(protein_symbol: str) -> dict:
         interactor_proteins.append(partner)
         protein_set.add(partner.symbol)
 
+        # CRITICAL FIX: Also track mediator proteins for indirect interactions
+        # This ensures mediators like RHEB are included in interactor_proteins list
+        # even if the ATXN3-RHEB interaction itself is indirect
+        if interaction.interaction_type == "indirect" and interaction.mediator_chain:
+            for mediator_symbol in interaction.mediator_chain:
+                mediator_protein = Protein.query.filter_by(symbol=mediator_symbol).first()
+                if mediator_protein:
+                    if mediator_protein not in interactor_proteins:
+                        interactor_proteins.append(mediator_protein)
+                    protein_set.add(mediator_symbol)
+
         # Extract FULL data from JSONB (preserves all fields: functions, evidence, PMIDs, etc.)
         interaction_data = interaction.data.copy()
 
@@ -609,14 +620,21 @@ def build_full_json_from_db(protein_symbol: str) -> dict:
                             Interaction.protein_b_id == mediator_protein.id
                         ).first()
 
-                    if chain_link and chain_link.id not in chain_link_ids:
-                        chain_link_ids.add(chain_link.id)
+                    if chain_link:
+                        # DEBUG: Log chain link discovery
+                        if chain_link.id not in chain_link_ids:
+                            print(f"[CHAIN LINK] Found: {mediator_symbol} → {target_protein.symbol} (ID: {chain_link.id}, type: {chain_link.interaction_type})")
+                            chain_link_ids.add(chain_link.id)
 
-                        # Add this chain link to interactor_proteins for shared link detection
-                        if chain_link.protein_a not in interactor_proteins:
-                            interactor_proteins.append(chain_link.protein_a)
-                        if chain_link.protein_b not in interactor_proteins:
-                            interactor_proteins.append(chain_link.protein_b)
+                            # Add this chain link to interactor_proteins for shared link detection
+                            if chain_link.protein_a not in interactor_proteins:
+                                interactor_proteins.append(chain_link.protein_a)
+                            if chain_link.protein_b not in interactor_proteins:
+                                interactor_proteins.append(chain_link.protein_b)
+                        else:
+                            print(f"[CHAIN LINK] Already processed: {mediator_symbol} → {target_protein.symbol} (ID: {chain_link.id})")
+                    else:
+                        print(f"[CHAIN LINK] NOT FOUND in database: {mediator_symbol} → {target_protein.symbol}")
 
                         # Add both proteins to protein set
                         protein_set.add(chain_link.protein_a.symbol)
@@ -716,11 +734,25 @@ def build_full_json_from_db(protein_symbol: str) -> dict:
 
         # Add shared interactions with FULL JSONB data (including functions)
         for shared_ix in shared_interactions:
-            # Skip if this interaction is part of an indirect chain in THIS query
             protein_a_sym = shared_ix.protein_a.symbol
             protein_b_sym = shared_ix.protein_b.symbol
-            if (protein_a_sym, protein_b_sym) in indirect_chain_pairs or (protein_b_sym, protein_a_sym) in indirect_chain_pairs:
-                continue  # Don't add to shared links
+
+            # Check if this is a DIRECT chain link (e.g., RHEB-MTOR extracted from ATXN3→RHEB→MTOR)
+            # These should be included even if they're part of an indirect chain
+            is_direct_chain_link = (
+                shared_ix.function_context == 'direct' and
+                (shared_ix.data.get('_inferred_from_chain') or
+                 shared_ix.discovery_method == 'indirect_chain_extraction')
+            )
+
+            # Skip if this interaction is part of an indirect chain in THIS query
+            # UNLESS it's a direct chain link (which we want to show)
+            if not is_direct_chain_link:
+                if (protein_a_sym, protein_b_sym) in indirect_chain_pairs or (protein_b_sym, protein_a_sym) in indirect_chain_pairs:
+                    print(f"[SHARED LINK] Skipping (part of indirect chain): {protein_a_sym} ↔ {protein_b_sym}")
+                    continue  # Don't add to shared links
+            else:
+                print(f"[SHARED LINK] Including direct chain link: {protein_a_sym} → {protein_b_sym} (ID: {shared_ix.id})")
             # Get both proteins involved in this shared link
             protein_a = shared_ix.protein_a
             protein_b = shared_ix.protein_b
