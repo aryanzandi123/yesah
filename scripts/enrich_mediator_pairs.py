@@ -80,13 +80,24 @@ def call_gemini_with_thinking(
     """
     client = google_genai.Client(api_key=api_key)
 
+    # Check if ThinkingMode is available (new API)
+    try:
+        thinking_config = types.ThinkingConfig(
+            mode=types.ThinkingMode.THINKING_MODE_ENABLED,
+            max_tokens=MAX_THINKING_TOKENS
+        )
+    except (AttributeError, TypeError):
+        # ThinkingMode not available in this version
+        thinking_config = None
+        print("[INFO] ThinkingMode not available, using standard mode")
+
     # Configure generation
-    config = types.GenerateContentConfig(
-        temperature=TEMPERATURE,
-        top_p=TOP_P,
-        max_output_tokens=MAX_OUTPUT_TOKENS,
-        response_modalities=["TEXT"],
-        safety_settings=[
+    config_args = {
+        "temperature": TEMPERATURE,
+        "top_p": TOP_P,
+        "max_output_tokens": MAX_OUTPUT_TOKENS,
+        "response_modalities": ["TEXT"],
+        "safety_settings": [
             types.SafetySetting(
                 category="HARM_CATEGORY_HATE_SPEECH",
                 threshold="OFF"
@@ -104,18 +115,23 @@ def call_gemini_with_thinking(
                 threshold="OFF"
             )
         ],
-        thinking_config=types.ThinkingConfig(
-            mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-            max_tokens=MAX_THINKING_TOKENS
-        ),
-        tools=[types.Tool(google_search=types.GoogleSearch())],  # Enable Google Search
-        response_mime_type="application/json" if response_format == "json" else "text/plain"
-    )
+        "tools": [types.Tool(google_search=types.GoogleSearch())],  # Enable Google Search
+        "response_mime_type": "application/json" if response_format == "json" else "text/plain"
+    }
+
+    # Add thinking_config only if available
+    if thinking_config:
+        config_args["thinking_config"] = thinking_config
+
+    config = types.GenerateContentConfig(**config_args)
+
+    # Use appropriate model based on thinking_config availability
+    model_name = "gemini-2.0-flash-thinking-exp-01-21" if thinking_config else "gemini-2.0-flash-exp"
 
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash-thinking-exp-01-21",
+                model=model_name,
                 contents=prompt,
                 config=config
             )
