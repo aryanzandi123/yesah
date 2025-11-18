@@ -59,7 +59,7 @@ except ImportError:
 
 
 # Constants
-MAX_WORKERS = 12
+MAX_WORKERS = 5
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
@@ -247,7 +247,7 @@ def query_direct_interaction_pair(
     protein_a: str,
     protein_b: str,
     api_key: str,
-    verbose: bool = False
+    verbose: bool = True
 ) -> Optional[Dict[str, Any]]:
     """
     Minimal pipeline query for ONLY the direct A↔B interaction.
