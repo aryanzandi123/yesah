@@ -1193,7 +1193,23 @@ function createSimulation(){
       // marker-start shows arrow at source end
       // Use for bidirectional (both ends) only
       if (dir === 'bidirectional') {
-        const a=d.arrow||'binds';
+        // CRITICAL: Use arrow_context if available (for dual-track interactions)
+        const arrowContext = (d.data && d.data.arrow_context) || null;
+        const functionContext = (d.data && d.data.function_context) || d.function_context;
+
+        let a = d.arrow || 'binds';
+        if (arrowContext) {
+          // Use direct_arrow for direct context, net_arrow for net context
+          if (functionContext === 'direct' && arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          } else if (functionContext === 'net' && arrowContext.net_arrow) {
+            a = arrowContext.net_arrow;
+          } else if (arrowContext.direct_arrow) {
+            // Fallback to direct_arrow if no context match
+            a = arrowContext.direct_arrow;
+          }
+        }
+
         if (a==='activates') return 'url(#arrow-activate)';
         if (a==='inhibits') return 'url(#arrow-inhibit)';
         if (a==='regulates') return 'url(#arrow-regulate)';
@@ -1209,7 +1225,23 @@ function createSimulation(){
       // Absolute: a_to_b, b_to_a (used for shared links and database storage)
       if (dir === 'main_to_primary' || dir === 'primary_to_main' || dir === 'bidirectional' ||
           dir === 'a_to_b' || dir === 'b_to_a') {
-        const a=d.arrow||'binds';
+        // CRITICAL: Use arrow_context if available (for dual-track interactions)
+        const arrowContext = (d.data && d.data.arrow_context) || null;
+        const functionContext = (d.data && d.data.function_context) || d.function_context;
+
+        let a = d.arrow || 'binds';
+        if (arrowContext) {
+          // Use direct_arrow for direct context, net_arrow for net context
+          if (functionContext === 'direct' && arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          } else if (functionContext === 'net' && arrowContext.net_arrow) {
+            a = arrowContext.net_arrow;
+          } else if (arrowContext.direct_arrow) {
+            // Fallback to direct_arrow if no context match
+            a = arrowContext.direct_arrow;
+          }
+        }
+
         if (a==='activates') return 'url(#arrow-activate)';
         if (a==='inhibits') return 'url(#arrow-inhibit)';
         if (a==='regulates') return 'url(#arrow-regulate)';
@@ -2075,7 +2107,23 @@ function showInteractionModal(link, clickedNode = null){
   };
 
   // Get interaction arrow (effect on the downstream protein)
-  const interactionArrow = L.arrow || link.arrow || 'binds';
+  // CRITICAL: Use arrow_context if available (for dual-track interactions)
+  const arrowContext = L.arrow_context || null;
+  const functionContext = L.function_context;
+
+  let interactionArrow = L.arrow || link.arrow || 'binds';
+  if (arrowContext) {
+    // Use direct_arrow for direct context, net_arrow for net context
+    if (functionContext === 'direct' && arrowContext.direct_arrow) {
+      interactionArrow = arrowContext.direct_arrow;
+    } else if (functionContext === 'net' && arrowContext.net_arrow) {
+      interactionArrow = arrowContext.net_arrow;
+    } else if (arrowContext.direct_arrow) {
+      // Fallback to direct_arrow if no context match
+      interactionArrow = arrowContext.direct_arrow;
+    }
+  }
+
   const normalized = interactionArrow === 'activates' || interactionArrow === 'activate' ? 'activates'
                    : interactionArrow === 'inhibits' || interactionArrow === 'inhibit' ? 'inhibits'
                    : interactionArrow === 'regulates' || interactionArrow === 'regulate' ? 'regulates'
@@ -4643,7 +4691,21 @@ function updateGraphWithTransitions(){
       // marker-start shows arrow at source end
       // Use for bidirectional (both ends) only
       if (dir === 'bidirectional') {
-        const a=d.arrow||'binds';
+        // CRITICAL: Use arrow_context if available (for dual-track interactions)
+        const arrowContext = (d.data && d.data.arrow_context) || null;
+        const functionContext = (d.data && d.data.function_context) || d.function_context;
+
+        let a = d.arrow || 'binds';
+        if (arrowContext) {
+          if (functionContext === 'direct' && arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          } else if (functionContext === 'net' && arrowContext.net_arrow) {
+            a = arrowContext.net_arrow;
+          } else if (arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          }
+        }
+
         if (a==='activates') return 'url(#arrow-activate)';
         if (a==='inhibits') return 'url(#arrow-inhibit)';
         return 'url(#arrow-binding)';
@@ -4658,7 +4720,21 @@ function updateGraphWithTransitions(){
       // Absolute: a_to_b, b_to_a (used for shared links and database storage)
       if (dir === 'main_to_primary' || dir === 'primary_to_main' || dir === 'bidirectional' ||
           dir === 'a_to_b' || dir === 'b_to_a') {
-        const a=d.arrow||'binds';
+        // CRITICAL: Use arrow_context if available (for dual-track interactions)
+        const arrowContext = (d.data && d.data.arrow_context) || null;
+        const functionContext = (d.data && d.data.function_context) || d.function_context;
+
+        let a = d.arrow || 'binds';
+        if (arrowContext) {
+          if (functionContext === 'direct' && arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          } else if (functionContext === 'net' && arrowContext.net_arrow) {
+            a = arrowContext.net_arrow;
+          } else if (arrowContext.direct_arrow) {
+            a = arrowContext.direct_arrow;
+          }
+        }
+
         if (a==='activates') return 'url(#arrow-activate)';
         if (a==='inhibits') return 'url(#arrow-inhibit)';
         return 'url(#arrow-binding)';
